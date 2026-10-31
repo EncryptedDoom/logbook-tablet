@@ -9,9 +9,10 @@
 ///       Makes the activation code for the tablet showing that device code,
 ///       and opens it as a QR code to scan.
 ///
-/// The private key lives outside the project, in %USERPROFILE%\.logbook, so it
-/// can never be committed or shipped inside the app. Back it up: without it no
-/// new tablet can be activated, short of a new key and a new build.
+/// The private key lives outside the project, in ~/.logbook (%USERPROFILE%
+/// on Windows), so it can never be committed or shipped inside the app. Back
+/// it up: without it no new tablet can be activated, short of a new key and a
+/// new build.
 library;
 
 import 'dart:convert';
@@ -106,6 +107,8 @@ Future<void> _activate(String deviceCode) async {
   stdout.writeln('QR code saved to ${page.path}');
   if (Platform.isWindows) {
     await Process.run('cmd', ['/c', 'start', '', page.path]);
+  } else if (Platform.isMacOS) {
+    await Process.run('open', [page.path]);
   }
 }
 

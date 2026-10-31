@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -29,11 +31,33 @@ android {
         versionName = flutter.versionName
     }
 
+    // The team's shared signing key lives outside the repository, in
+    // ~/.logbook beside the activation key. With it, a build from any team
+    // member's machine installs over any other - and the device code stays the
+    // same, since Android derives it partly from the signing key. Without it
+    // the build falls back to this machine's own debug key, which works on an
+    // emulator but can never update the real tablet.
+    val sharedSigning = File(System.getProperty("user.home"), ".logbook/signing.properties")
+    if (sharedSigning.exists()) {
+        val props = Properties().apply { sharedSigning.inputStream().use { load(it) } }
+        signingConfigs.create("shared") {
+            storeFile = File(sharedSigning.parentFile, props.getProperty("storeFile"))
+            storePassword = props.getProperty("storePassword")
+            keyAlias = props.getProperty("keyAlias")
+            keyPassword = props.getProperty("keyPassword")
+        }
+    } else {
+        logger.warn("No ~/.logbook/signing.properties: signing with this machine's debug key")
+    }
+    val teamSigning = signingConfigs.findByName("shared") ?: signingConfigs.getByName("debug")
+
     buildTypes {
+        debug {
+            // debug builds too, so `flutter run` can update the tablet
+            signingConfig = teamSigning
+        }
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = teamSigning
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

@@ -33,6 +33,24 @@ no stylus. Such builds show a red **TEST MODE** ribbon. Never install one on
 the real tablet: it turns off palm rejection. Builds for the tablet use plain
 `flutter run` / `flutter build apk`.
 
+## Team secrets
+
+Two secrets are kept outside the repository, in a `.logbook` folder in your
+home directory (`~/.logbook` on macOS, `%USERPROFILE%\.logbook` on Windows):
+
+| File | What it does |
+| --- | --- |
+| `activation-private-key.txt` | Issues activation codes for any device |
+| `logbook-signing.p12`, `signing.properties` | The team signing key. Builds from any team member's machine install over each other, including on the real tablet |
+
+Get the folder from a team member over a private channel and copy it into
+your home directory. The build picks the signing key up automatically. Never
+commit these files or post them anywhere shared. `.gitignore` blocks them as a
+safety net.
+
+Without the folder you can still build and run on an emulator, signed with
+your machine's own debug key, but that build can never update the real tablet.
+
 ## Activation
 
 The app opens to a lock screen until the device is activated, so a copied APK
@@ -40,20 +58,17 @@ is useless on an unapproved tablet. (Android no longer lets apps read the MAC
 address; activation binds to `ANDROID_ID` instead.)
 
 1. The lock screen shows a 12-character device code.
-2. The administrator signs it on their PC:
+2. Sign it with the private key:
    `dart run tool/activate.dart <DEVICE-CODE>`. This opens a page with an
    activation QR and the code as text.
 3. Scan the QR on the device, or paste the code under *Type the code instead*
    (always the case on an emulator).
 
-Only the administrator holds the private key, in `%USERPROFILE%\.logbook`,
-outside this repository. `lib/activation_key.dart` is the public half and is
-safe to commit. Never commit or send the private key.
+`lib/activation_key.dart` is the public half of the key and is safe to commit.
 
-The device code depends on the signing key as well as the device, so an app
-you build yourself shows a different code from an APK built on another
-machine. Each needs its own activation. To see the lock screen again on an
-emulator:
+The device code depends on the signing key as well as the device. Everyone
+building with the team key gets the same code on a given device. To see the
+lock screen again on an emulator:
 
 ```sh
 adb shell run-as com.logbook.logbook rm databases/activation
@@ -85,3 +100,15 @@ flutter test
 
 Database changes go through a new schema version and a step in `_upgrade` in
 `lib/database.dart`; the real tablet holds records that must survive updates.
+
+## Updating the real tablet
+
+Only install builds signed with the team key, and never uninstall the app on
+the tablet: uninstalling deletes every record. If an install is refused with a
+signature mismatch, stop and check which key the tablet's copy was signed
+with. Back up the database before any risky step (works on debug builds):
+
+```sh
+adb shell "run-as com.logbook.logbook cat databases/logbook.db > /data/local/tmp/logbook.db"
+adb pull /data/local/tmp/logbook.db
+```
