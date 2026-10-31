@@ -12,6 +12,13 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide Ink;
 import 'package:google_mlkit_digital_ink_recognition/google_mlkit_digital_ink_recognition.dart';
 
+/// Lets a finger or mouse draw, for testing in the emulator, where the mouse
+/// arrives as touch. Off unless the app is built with
+///   --dart-define=ALLOW_FINGER_DRAWING=true
+/// Deliberately not tied to debug mode: the tablet runs debug builds too, and
+/// must keep palm rejection.
+const allowFingerDrawing = bool.fromEnvironment('ALLOW_FINGER_DRAWING');
+
 /// What the pad produced: strokes to recognise, pixels to keep.
 class Handwriting {
   const Handwriting(this.strokes, this.png);
@@ -77,22 +84,65 @@ class _HandwritingPadState extends State<HandwritingPad> {
   /// resting hand drew on it.
   bool _isPen(PointerDeviceKind kind) =>
       kind == PointerDeviceKind.stylus ||
-      kind == PointerDeviceKind.invertedStylus;
+      kind == PointerDeviceKind.invertedStylus ||
+      (allowFingerDrawing &&
+          (kind == PointerDeviceKind.touch || kind == PointerDeviceKind.mouse));
+
+  /// True from pen-down to pen-up, whether or not the pen is currently inside
+  /// the box - so a stroke that wanders out and comes back can resume.
+  bool _penDown = false;
+
+  Rect get _bounds => Offset.zero & _size;
+
+  /// Pull a point onto the box edge, so a stroke that leaves ends at the
+  /// border instead of stopping short of it.
+  Offset _clamp(Offset p) => Offset(
+        p.dx.clamp(0.0, _size.width),
+        p.dy.clamp(0.0, _size.height),
+      );
 
   void _start(PointerDownEvent event) {
     if (!_isPen(event.kind)) return;
-    _current.clear();
-    _addPoint(event.localPosition);
-    setState(() => _drawnCurrent = [event.localPosition]);
+    _penDown = true;
+    _beginStroke(event.localPosition);
   }
 
+  /// Once the pen lands in this box, Flutter keeps routing its moves here even
+  /// after it leaves - which is how lines used to run off the edge. So: end
+  /// the stroke at the border when the pen crosses it, ignore it while it is
+  /// outside, and start a fresh stroke if it comes back in without lifting.
   void _extend(PointerMoveEvent event) {
-    if (!_isPen(event.kind) || _drawnCurrent.isEmpty) return;
-    _addPoint(event.localPosition);
-    setState(() => _drawnCurrent = [..._drawnCurrent, event.localPosition]);
+    if (!_isPen(event.kind) || !_penDown) return;
+    final point = event.localPosition;
+    final inside = _bounds.contains(point);
+    final drawing = _drawnCurrent.isNotEmpty;
+
+    if (drawing && inside) {
+      _addPoint(point);
+      setState(() => _drawnCurrent = [..._drawnCurrent, point]);
+    } else if (drawing && !inside) {
+      final edge = _clamp(point);
+      _addPoint(edge);
+      _drawnCurrent = [..._drawnCurrent, edge];
+      _commitStroke();
+    } else if (!drawing && inside) {
+      _beginStroke(point);
+    }
+    // not drawing and still outside: nothing to do
   }
 
-  void _end(PointerUpEvent event) {
+  void _end(PointerEvent event) {
+    _penDown = false;
+    _commitStroke();
+  }
+
+  void _beginStroke(Offset point) {
+    _current.clear();
+    _addPoint(point);
+    setState(() => _drawnCurrent = [point]);
+  }
+
+  void _commitStroke() {
     if (_current.isEmpty) return;
     _strokes.add(Stroke()..points = List.of(_current));
     _drawn.add(List.of(_drawnCurrent));
@@ -187,9 +237,13 @@ class _HandwritingPadState extends State<HandwritingPad> {
                         GestureRecognizerFactoryWithHandlers<
                             EagerGestureRecognizer>(
                       () => EagerGestureRecognizer(
-                        supportedDevices: const {
+                        supportedDevices: {
                           PointerDeviceKind.stylus,
                           PointerDeviceKind.invertedStylus,
+                          if (allowFingerDrawing) ...[
+                            PointerDeviceKind.touch,
+                            PointerDeviceKind.mouse,
+                          ],
                         },
                       ),
                       (_) {},
@@ -199,9 +253,15 @@ class _HandwritingPadState extends State<HandwritingPad> {
                     onPointerDown: _start,
                     onPointerMove: _extend,
                     onPointerUp: _end,
-                    child: CustomPaint(
-                      painter: _PadPainter(_drawn, _drawnCurrent),
-                      size: Size.infinite,
+                    // e.g. the system takes the pointer for a gesture
+                    onPointerCancel: _end,
+                    // belt and braces: nothing this pad paints can show
+                    // outside it, whatever the stroke data holds
+                    child: ClipRect(
+                      child: CustomPaint(
+                        painter: _PadPainter(_drawn, _drawnCurrent),
+                        size: Size.infinite,
+                      ),
                     ),
                   ),
                 ),

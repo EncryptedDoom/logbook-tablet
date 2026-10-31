@@ -7,8 +7,11 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'activation_screen.dart';
 import 'database.dart';
 import 'entry_screen.dart';
+import 'handwriting_pad.dart' show allowFingerDrawing;
+import 'licence.dart';
 import 'recogniser.dart';
 
 void main() => runApp(const LogbookApp());
@@ -29,7 +32,49 @@ class LogbookApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF17151A),
         useMaterial3: true,
       ),
-      home: const CoverScreen(),
+      home: const ActivationGate(),
+      // a build that lets fingers draw must never pass for the real thing
+      builder: allowFingerDrawing
+          ? (context, child) => Banner(
+                message: 'TEST MODE',
+                location: BannerLocation.topEnd,
+                color: Colors.red.shade700,
+                child: child!,
+              )
+          : null,
+    );
+  }
+}
+
+/// Nothing of the book - not even the cover - opens on a tablet that has not
+/// been activated.
+class ActivationGate extends StatefulWidget {
+  const ActivationGate({super.key});
+
+  @override
+  State<ActivationGate> createState() => _ActivationGateState();
+}
+
+class _ActivationGateState extends State<ActivationGate> {
+  late Future<bool> _activated = Licence.isActivated();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _activated,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold();
+        }
+        if (snapshot.data == true) return const CoverScreen();
+        return ActivationScreen(
+          // block body: an arrow here would hand the Future to setState,
+          // which throws and leaves the screen stuck on its spinner
+          onActivated: () => setState(() {
+            _activated = Future.value(true);
+          }),
+        );
+      },
     );
   }
 }

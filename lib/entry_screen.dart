@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'database.dart';
 import 'date_field.dart';
+import 'export_screen.dart';
 import 'handwriting_pad.dart';
 import 'record.dart';
 import 'recogniser.dart';
@@ -181,6 +182,14 @@ class _EntryScreenState extends State<EntryScreen> {
       appBar: AppBar(
         title: const Text('Visitors Book'),
         actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => ExportScreen(db: widget.db)),
+            ),
+            icon: const Icon(Icons.picture_as_pdf),
+            label: const Text('Export'),
+          ),
+          const SizedBox(width: 8),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Center(
