@@ -10,15 +10,22 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'theme.dart';
+
 class DateField extends StatelessWidget {
   const DateField({
     super.key,
     required this.value,
     required this.onChanged,
+    this.aspectRatio = 3.8,
   });
 
   final DateTime value;
   final ValueChanged<DateTime> onChanged;
+
+  /// Matches the handwriting pads beside it, so Date/Name/Place share one
+  /// row height.
+  final double aspectRatio;
 
   /// Same shape the search layer canonicalises to.
   static String format(DateTime date) =>
@@ -46,24 +53,50 @@ class DateField extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('DATE', style: Theme.of(context).textTheme.labelMedium),
-            TextButton(
+            Text('DATE', style: labelStyle(context)),
+            IconButton(
               onPressed: () => onChanged(DateTime.now()),
-              style: TextButton.styleFrom(
-                minimumSize: const Size(64, 44),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-              ),
-              child: const Text('Today'),
+              tooltip: 'Today',
+              icon: const Icon(Icons.today_outlined, size: 20),
+              iconSize: 20,
+              color: AppColors.textMuted,
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             ),
           ],
         ),
-        OutlinedButton.icon(
-          onPressed: () => _pick(context),
-          icon: const Icon(Icons.calendar_today),
-          label: Text(format(value), style: const TextStyle(fontSize: 18)),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(56),
-            alignment: Alignment.centerLeft,
+        AspectRatio(
+          aspectRatio: aspectRatio,
+          child: Material(
+            color: AppColors.paper,
+            borderRadius: BorderRadius.circular(AppRadii.pad),
+            child: InkWell(
+              onTap: () => _pick(context),
+              borderRadius: BorderRadius.circular(AppRadii.pad),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: AppColors.ink.withValues(alpha: 0.15),
+                  ),
+                  borderRadius: BorderRadius.circular(AppRadii.pad),
+                ),
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  children: [
+                    const Icon(Icons.calendar_today,
+                        size: 20, color: AppColors.ink),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      format(value),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        color: AppColors.ink,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ],

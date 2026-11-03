@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import 'database.dart';
 import 'record.dart';
+import 'theme.dart';
 
 /// Same ratios as the entry form, so a field is the size it was written at.
 const _ratios = <String, double>{
@@ -65,11 +66,11 @@ class _RecordViewState extends State<RecordView> {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Expanded(child: _pickedDate()),
+                    const SizedBox(width: 16),
                     Expanded(child: _field('name')),
                     const SizedBox(width: 16),
                     Expanded(child: _field('place')),
-                    const SizedBox(width: 16),
-                    Expanded(child: _pickedDate()),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -95,19 +96,20 @@ class _RecordViewState extends State<RecordView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('DATE', style: Theme.of(context).textTheme.labelMedium),
+        Text('DATE', style: labelStyle(context)),
         const SizedBox(height: 4),
         Container(
           height: 56,
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade600),
-            borderRadius: BorderRadius.circular(4),
+            color: AppColors.paper,
+            border: Border.all(color: AppColors.ink.withValues(alpha: 0.15)),
+            borderRadius: BorderRadius.circular(AppRadii.pad),
           ),
           child: Text(
             widget.record.ocr['date'] ?? '-',
-            style: const TextStyle(fontSize: 18),
+            style: const TextStyle(fontSize: 18, color: AppColors.ink),
           ),
         ),
       ],
@@ -121,20 +123,22 @@ class _RecordViewState extends State<RecordView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(name.toUpperCase(),
-            style: Theme.of(context).textTheme.labelMedium),
+        Text(name.toUpperCase(), style: labelStyle(context)),
         const SizedBox(height: 4),
         AspectRatio(
           aspectRatio: _ratios[name]!,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.grey.shade400),
-              borderRadius: BorderRadius.circular(4),
+              color: AppColors.paper,
+              border: Border.all(color: AppColors.ink.withValues(alpha: 0.15)),
+              borderRadius: BorderRadius.circular(AppRadii.pad),
             ),
             child: png == null
                 ? const Center(child: Text('-'))
-                : Image.memory(png, fit: BoxFit.contain),
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadii.pad),
+                    child: Image.memory(png, fit: BoxFit.contain),
+                  ),
           ),
         ),
         if (read != null && read.isNotEmpty)
@@ -145,7 +149,7 @@ class _RecordViewState extends State<RecordView> {
               style: Theme.of(context)
                   .textTheme
                   .bodySmall
-                  ?.copyWith(color: const Color(0xFFD9B46A)),
+                  ?.copyWith(color: AppColors.gold),
             ),
           ),
       ],

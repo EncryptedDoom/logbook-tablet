@@ -5,12 +5,14 @@
 /// only the picture, which is why recognition there was so much worse.
 library;
 
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide Ink;
 import 'package:google_mlkit_digital_ink_recognition/google_mlkit_digital_ink_recognition.dart';
+
+import 'theme.dart';
 
 /// Lets a finger or mouse draw, for testing in the emulator, where the mouse
 /// arrives as touch. Off unless the app is built with
@@ -47,7 +49,8 @@ class HandwritingPad extends StatefulWidget {
   State<HandwritingPad> createState() => _HandwritingPadState();
 }
 
-/// Lets the form clear every pad and collect what was written.
+/// Lets the form clear every pad, collect what was written, and hear when
+/// ink lands (e.g. to enable a submit button).
 class HandwritingPadController extends ChangeNotifier {
   _HandwritingPadState? _state;
 
@@ -57,6 +60,8 @@ class HandwritingPadController extends ChangeNotifier {
   void clear() => _state?.clearPad();
 
   bool get isEmpty => _state?._strokes.isEmpty ?? true;
+
+  void _notifyInkChanged() => notifyListeners();
 }
 
 class _HandwritingPadState extends State<HandwritingPad> {
@@ -82,10 +87,15 @@ class _HandwritingPadState extends State<HandwritingPad> {
   /// A palm resting on the glass reports as touch, not stylus. Ignoring touch
   /// is the whole of palm rejection; the web version had no equivalent and a
   /// resting hand drew on it.
+  // DEBUG ONLY - lets the emulator draw with a mouse; release stays
+  // stylus-only.
   bool _isPen(PointerDeviceKind kind) =>
       kind == PointerDeviceKind.stylus ||
       kind == PointerDeviceKind.invertedStylus ||
       (allowFingerDrawing &&
+          (kind == PointerDeviceKind.touch ||
+              kind == PointerDeviceKind.mouse)) ||
+      (kDebugMode &&
           (kind == PointerDeviceKind.touch || kind == PointerDeviceKind.mouse));
 
   /// True from pen-down to pen-up, whether or not the pen is currently inside
@@ -148,6 +158,8 @@ class _HandwritingPadState extends State<HandwritingPad> {
     _drawn.add(List.of(_drawnCurrent));
     _current.clear();
     setState(() => _drawnCurrent = []);
+    // lets the form know ink has landed, e.g. to enable Record Entry
+    widget.controller._notifyInkChanged();
   }
 
   void _addPoint(Offset position) {
@@ -168,9 +180,10 @@ class _HandwritingPadState extends State<HandwritingPad> {
       _drawn.clear();
       _drawnCurrent = [];
     });
+    widget.controller._notifyInkChanged();
   }
 
-  /// Render what was written to a PNG, white background so it reads like ink
+  /// Render what was written to a PNG, paper background so it reads like ink
   /// on paper wherever it is shown.
   Future<Handwriting> capture() async {
     if (_strokes.isEmpty || _size.isEmpty) {
@@ -181,7 +194,7 @@ class _HandwritingPadState extends State<HandwritingPad> {
     final canvas = Canvas(recorder);
     canvas.drawRect(
       Rect.fromLTWH(0, 0, _size.width, _size.height),
-      Paint()..color = Colors.white,
+      Paint()..color = AppColors.paper,
     );
     _paintStrokes(canvas, _drawn, const []);
     final image = await recorder
@@ -201,17 +214,17 @@ class _HandwritingPadState extends State<HandwritingPad> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              widget.label.toUpperCase(),
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-            TextButton(
+            Text(widget.label.toUpperCase(), style: labelStyle(context)),
+            IconButton(
               onPressed: clearPad,
-              style: TextButton.styleFrom(
-                minimumSize: const Size(64, 44), // a real touch target
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+              tooltip: 'Clear',
+              icon: const Icon(Icons.backspace_outlined, size: 20),
+              iconSize: 20,
+              color: AppColors.textMuted,
+              constraints: const BoxConstraints(
+                minWidth: 48,
+                minHeight: 48, // a real touch target
               ),
-              child: const Text('Clear'),
             ),
           ],
         ),
@@ -222,9 +235,9 @@ class _HandwritingPadState extends State<HandwritingPad> {
               _size = Size(constraints.maxWidth, constraints.maxHeight);
               return DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(4),
+                  color: AppColors.paper,
+                  border: Border.all(color: AppColors.ink.withValues(alpha: 0.15)),
+                  borderRadius: BorderRadius.circular(AppRadii.pad),
                 ),
                 // Without this the enclosing scroll view treats a pen stroke
                 // as a drag and scrolls the page out from under the writer.
@@ -244,6 +257,12 @@ class _HandwritingPadState extends State<HandwritingPad> {
                             PointerDeviceKind.touch,
                             PointerDeviceKind.mouse,
                           ],
+                          // DEBUG ONLY - lets the emulator draw with a
+                          // mouse; release stays stylus-only.
+                          if (kDebugMode) ...[
+                            PointerDeviceKind.touch,
+                            PointerDeviceKind.mouse,
+                          ],
                         },
                       ),
                       (_) {},
@@ -257,7 +276,8 @@ class _HandwritingPadState extends State<HandwritingPad> {
                     onPointerCancel: _end,
                     // belt and braces: nothing this pad paints can show
                     // outside it, whatever the stroke data holds
-                    child: ClipRect(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadii.pad),
                       child: CustomPaint(
                         painter: _PadPainter(_drawn, _drawnCurrent),
                         size: Size.infinite,
@@ -280,7 +300,7 @@ void _paintStrokes(
   List<Offset> current,
 ) {
   final paint = Paint()
-    ..color = const Color(0xFF111111)
+    ..color = AppColors.ink
     ..strokeWidth = 3
     ..strokeCap = StrokeCap.round
     ..strokeJoin = StrokeJoin.round
@@ -303,8 +323,19 @@ class _PadPainter extends CustomPainter {
   final List<Offset> current;
 
   @override
-  void paint(Canvas canvas, Size size) =>
-      _paintStrokes(canvas, strokes, current);
+  void paint(Canvas canvas, Size size) {
+    // a faint baseline near the lower third, like a ruled page - guidance
+    // only, never part of the recorded ink
+    final y = size.height * 2 / 3;
+    canvas.drawLine(
+      Offset(0, y),
+      Offset(size.width, y),
+      Paint()
+        ..color = AppColors.ink.withValues(alpha: 0.12)
+        ..strokeWidth = 1,
+    );
+    _paintStrokes(canvas, strokes, current);
+  }
 
   @override
   bool shouldRepaint(covariant _PadPainter old) => true;
