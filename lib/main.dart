@@ -5,7 +5,9 @@
 /// fetched the first time.
 library;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'activation_screen.dart';
 import 'database.dart';
@@ -56,7 +58,9 @@ class ActivationGate extends StatefulWidget {
 }
 
 class _ActivationGateState extends State<ActivationGate> {
-  late Future<bool> _activated = Licence.isActivated();
+  // DEBUG ONLY - remove before sharing; release builds enforce activation.
+  late Future<bool> _activated =
+      kDebugMode ? Future.value(true) : Licence.isActivated();
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +99,8 @@ class _CoverScreenState extends State<CoverScreen> {
   void initState() {
     super.initState();
     _open();
+    // the cover is a kiosk-style splash - no status bar while it's up
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
   @override
@@ -121,67 +127,74 @@ class _CoverScreenState extends State<CoverScreen> {
     }
   }
 
+  void _proceed() {
+    // the entry screen is a normal working screen, not a kiosk splash
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => EntryScreen(db: _db!, recogniser: _recogniser),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ready = _db != null;
     return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(48),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '7th Battalion',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      letterSpacing: 4,
-                      color: const Color(0xFFD9B46A),
-                    ),
-                textAlign: TextAlign.center,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: Container(
+              color: const Color(0xFFFFFFCC),
+              child: Image.asset(
+                'assets/images/cover.png',
+                fit: BoxFit.contain,
+                alignment: Alignment.center,
               ),
-              const SizedBox(height: 8),
-              Text(
-                'VISITORS BOOK',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(letterSpacing: 8),
-              ),
-              const SizedBox(height: 24),
-              Container(width: 160, height: 1, color: const Color(0xFF8A6B35)),
-              const SizedBox(height: 24),
-              Text(
-                'Please record your visit. Every entry is written by hand.',
-                style: Theme.of(context).textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 48),
-              FilledButton(
-                style:
-                    FilledButton.styleFrom(minimumSize: const Size(280, 56)),
-                onPressed: ready
-                    ? () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => EntryScreen(
-                              db: _db!,
-                              recogniser: _recogniser,
-                            ),
-                          ),
-                        )
-                    : null,
-                child: Text(ready ? 'PROCEED' : 'Preparing...'),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 24),
-                Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ],
+            ),
           ),
-        ),
+          SafeArea(
+            child: Align(
+              // horizontally under WELCOMES' own midpoint (that badge sits
+              // right of screen-center, not centered on it); vertically in
+              // the cream gap between WELCOMES and the red banner below
+              alignment: const Alignment(0.23, 0.67),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(280, 64),
+                        backgroundColor: const Color(0xFF6F4E37),
+                        foregroundColor: Colors.white,
+                        textStyle: const TextStyle(
+                          fontFamily: 'serif',
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      onPressed: ready ? _proceed : null,
+                      child: Text(ready ? 'PROCEED' : 'Preparing...'),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        _error!,
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

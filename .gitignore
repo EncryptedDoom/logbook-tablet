@@ -53,3 +53,7 @@ app.*.map.json
 *.keystore
 signing.properties
 activation-private-key*
+
+# Local AI tooling
+.claude/
+
