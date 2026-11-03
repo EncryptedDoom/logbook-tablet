@@ -24,7 +24,7 @@ Future<(HandwritingPadController, Rect)> _pad(WidgetTester tester) async {
   );
   final area = find.descendant(
     of: find.byType(HandwritingPad),
-    matching: find.byType(ClipRect),
+    matching: find.byType(ClipRRect),
   );
   return (controller, tester.getRect(area));
 }

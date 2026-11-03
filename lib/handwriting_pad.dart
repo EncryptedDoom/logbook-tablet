@@ -12,6 +12,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide Ink;
 import 'package:google_mlkit_digital_ink_recognition/google_mlkit_digital_ink_recognition.dart';
 
+import 'box_style.dart';
+
 /// Lets a finger or mouse draw, for testing in the emulator, where the mouse
 /// arrives as touch. Off unless the app is built with
 ///   --dart-define=ALLOW_FINGER_DRAWING=true
@@ -96,10 +98,8 @@ class _HandwritingPadState extends State<HandwritingPad> {
 
   /// Pull a point onto the box edge, so a stroke that leaves ends at the
   /// border instead of stopping short of it.
-  Offset _clamp(Offset p) => Offset(
-        p.dx.clamp(0.0, _size.width),
-        p.dy.clamp(0.0, _size.height),
-      );
+  Offset _clamp(Offset p) =>
+      Offset(p.dx.clamp(0.0, _size.width), p.dy.clamp(0.0, _size.height));
 
   void _start(PointerDownEvent event) {
     if (!_isPen(event.kind)) return;
@@ -171,7 +171,9 @@ class _HandwritingPadState extends State<HandwritingPad> {
   }
 
   /// Render what was written to a PNG, white background so it reads like ink
-  /// on paper wherever it is shown.
+  /// on paper wherever it is shown. White rather than the pad's off-white:
+  /// the PNG is the record and gets printed, and the record view tints it to
+  /// match its box on screen.
   Future<Handwriting> capture() async {
     if (_strokes.isEmpty || _size.isEmpty) {
       return Handwriting(List.of(_strokes), null);
@@ -184,9 +186,10 @@ class _HandwritingPadState extends State<HandwritingPad> {
       Paint()..color = Colors.white,
     );
     _paintStrokes(canvas, _drawn, const []);
-    final image = await recorder
-        .endRecording()
-        .toImage(_size.width.round(), _size.height.round());
+    final image = await recorder.endRecording().toImage(
+      _size.width.round(),
+      _size.height.round(),
+    );
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
 
@@ -221,11 +224,7 @@ class _HandwritingPadState extends State<HandwritingPad> {
             builder: (context, constraints) {
               _size = Size(constraints.maxWidth, constraints.maxHeight);
               return DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.grey.shade400),
-                  borderRadius: BorderRadius.circular(4),
-                ),
+                decoration: boxDecoration,
                 // Without this the enclosing scroll view treats a pen stroke
                 // as a drag and scrolls the page out from under the writer.
                 // An eager recogniser restricted to the stylus claims the
@@ -235,19 +234,20 @@ class _HandwritingPadState extends State<HandwritingPad> {
                   gestures: <Type, GestureRecognizerFactory>{
                     EagerGestureRecognizer:
                         GestureRecognizerFactoryWithHandlers<
-                            EagerGestureRecognizer>(
-                      () => EagerGestureRecognizer(
-                        supportedDevices: {
-                          PointerDeviceKind.stylus,
-                          PointerDeviceKind.invertedStylus,
-                          if (allowFingerDrawing) ...[
-                            PointerDeviceKind.touch,
-                            PointerDeviceKind.mouse,
-                          ],
-                        },
-                      ),
-                      (_) {},
-                    ),
+                          EagerGestureRecognizer
+                        >(
+                          () => EagerGestureRecognizer(
+                            supportedDevices: {
+                              PointerDeviceKind.stylus,
+                              PointerDeviceKind.invertedStylus,
+                              if (allowFingerDrawing) ...[
+                                PointerDeviceKind.touch,
+                                PointerDeviceKind.mouse,
+                              ],
+                            },
+                          ),
+                          (_) {},
+                        ),
                   },
                   child: Listener(
                     onPointerDown: _start,
@@ -256,8 +256,10 @@ class _HandwritingPadState extends State<HandwritingPad> {
                     // e.g. the system takes the pointer for a gesture
                     onPointerCancel: _end,
                     // belt and braces: nothing this pad paints can show
-                    // outside it, whatever the stroke data holds
-                    child: ClipRect(
+                    // outside it, rounded corners included, whatever the
+                    // stroke data holds
+                    child: ClipRRect(
+                      borderRadius: boxRadius,
                       child: CustomPaint(
                         painter: _PadPainter(_drawn, _drawnCurrent),
                         size: Size.infinite,

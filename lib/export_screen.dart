@@ -14,18 +14,25 @@ import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
+import 'box_style.dart';
 import 'database.dart';
 import 'export_pdf.dart';
 import 'record.dart';
 
 /// Paper sizes offered, as width x height in points, portrait way up.
 enum PaperSize {
-  logbook('Logbook (13.8 x 9.6 in)', 9.6 * PdfPageFormat.inch,
-      13.8 * PdfPageFormat.inch),
+  logbook(
+    'Logbook (13.8 x 9.6 in)',
+    9.6 * PdfPageFormat.inch,
+    13.8 * PdfPageFormat.inch,
+  ),
   a4('A4 (210 x 297 mm)', 210 * PdfPageFormat.mm, 297 * PdfPageFormat.mm),
   a3('A3 (297 x 420 mm)', 297 * PdfPageFormat.mm, 420 * PdfPageFormat.mm),
-  letter('Letter (8.5 x 11 in)', 8.5 * PdfPageFormat.inch,
-      11 * PdfPageFormat.inch),
+  letter(
+    'Letter (8.5 x 11 in)',
+    8.5 * PdfPageFormat.inch,
+    11 * PdfPageFormat.inch,
+  ),
   custom('Custom size', 0, 0);
 
   const PaperSize(this.label, this.shortSide, this.longSide);
@@ -114,7 +121,7 @@ class _ExportScreenState extends State<ExportScreen> {
       if (w < min || h < min || w > max || h > max) {
         return (
           null,
-          'Each side must be between ${fmt(min)} and ${fmt(max)} ${_unit.label}.'
+          'Each side must be between ${fmt(min)} and ${fmt(max)} ${_unit.label}.',
         );
       }
       a = w * _unit.points;
@@ -153,9 +160,7 @@ class _ExportScreenState extends State<ExportScreen> {
       final entries = <ExportEntry>[];
       for (final record in _records) {
         final images = await widget.db.imagesFor(record.rawId);
-        entries.add(
-          ExportEntry(record, images, vip: _vip.contains(record.id)),
-        );
+        entries.add(ExportEntry(record, images, vip: _vip.contains(record.id)));
       }
       return await buildLogbookPdf(entries, format: format);
     } catch (e) {
@@ -180,12 +185,14 @@ class _ExportScreenState extends State<ExportScreen> {
     final bytes = await _build(format);
     if (bytes == null) return;
     try {
-      final saved = await _files.invokeMethod<String>(
-        'savePdf',
-        {'bytes': bytes, 'name': _fileName},
-      );
+      final saved = await _files.invokeMethod<String>('savePdf', {
+        'bytes': bytes,
+        'name': _fileName,
+      });
       if (!mounted) return;
-      setState(() => _status = saved == null ? 'Save cancelled.' : 'Saved $_fileName');
+      setState(
+        () => _status = saved == null ? 'Save cancelled.' : 'Saved $_fileName',
+      );
     } on PlatformException catch (e) {
       if (mounted) setState(() => _status = 'Could not save: ${e.message}');
     }
@@ -268,8 +275,9 @@ class _ExportScreenState extends State<ExportScreen> {
                 onPressed: ready ? _print : null,
                 icon: const Icon(Icons.print),
                 label: const Text('PRINT'),
-                style:
-                    OutlinedButton.styleFrom(minimumSize: const Size(140, 56)),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(140, 56),
+                ),
               ),
               const SizedBox(width: 12),
               FilledButton.icon(
@@ -297,24 +305,28 @@ class _ExportScreenState extends State<ExportScreen> {
           Wrap(
             spacing: 16,
             runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
+            // the boxes carry labels above them, so line up their bottoms
+            crossAxisAlignment: WrapCrossAlignment.end,
             children: [
               SizedBox(
                 width: 260,
-                child: DropdownButtonFormField<PaperSize>(
-                  initialValue: _paper,
-                  decoration: const InputDecoration(
-                    labelText: 'Paper size',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                child: BoxLabel(
+                  'Paper size',
+                  child: DropdownButtonFormField<PaperSize>(
+                    initialValue: _paper,
+                    decoration: boxInput(context),
+                    style: boxText,
+                    dropdownColor: boxFill,
+                    iconEnabledColor: boxInk,
+                    borderRadius: boxRadius,
+                    items: [
+                      for (final p in PaperSize.values)
+                        DropdownMenuItem(value: p, child: Text(p.label)),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (p) => setState(() => _paper = p ?? _paper),
                   ),
-                  items: [
-                    for (final p in PaperSize.values)
-                      DropdownMenuItem(value: p, child: Text(p.label)),
-                  ],
-                  onChanged: _busy
-                      ? null
-                      : (p) => setState(() => _paper = p ?? _paper),
                 ),
               ),
               SegmentedButton<bool>(
@@ -342,7 +354,7 @@ class _ExportScreenState extends State<ExportScreen> {
             Wrap(
               spacing: 16,
               runSpacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.end,
               children: [
                 _dimension(_customWidth, 'Width'),
                 _dimension(_customHeight, 'Height'),
@@ -374,29 +386,30 @@ class _ExportScreenState extends State<ExportScreen> {
   Widget _dimension(TextEditingController controller, String label) {
     return SizedBox(
       width: 140,
-      child: TextField(
-        controller: controller,
-        enabled: !_busy,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-        ],
-        decoration: InputDecoration(
-          labelText: label,
-          suffixText: _unit.label,
-          border: const OutlineInputBorder(),
-          isDense: true,
+      child: BoxLabel(
+        label,
+        child: TextField(
+          controller: controller,
+          enabled: !_busy,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+          ],
+          style: boxText,
+          cursorColor: boxInk,
+          decoration: boxInput(context, suffix: _unit.label),
+          onChanged: (_) => setState(() {}),
         ),
-        onChanged: (_) => setState(() {}),
       ),
     );
   }
 
   Widget _row(LogRecord record) {
     final name = record.ocr['name'];
-    final details = [record.ocr['place'] ?? '', record.ocr['date'] ?? '']
-        .where((s) => s.isNotEmpty)
-        .join('  ·  ');
+    final details = [
+      record.ocr['place'] ?? '',
+      record.ocr['date'] ?? '',
+    ].where((s) => s.isNotEmpty).join('  ·  ');
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),

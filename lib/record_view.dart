@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'box_style.dart';
 import 'database.dart';
 import 'record.dart';
 
@@ -100,14 +101,11 @@ class _RecordViewState extends State<RecordView> {
         Container(
           height: 56,
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade600),
-            borderRadius: BorderRadius.circular(4),
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: boxDecoration,
           child: Text(
             widget.record.ocr['date'] ?? '-',
-            style: const TextStyle(fontSize: 18),
+            style: const TextStyle(fontSize: 18, color: boxInk),
           ),
         ),
       ],
@@ -121,20 +119,32 @@ class _RecordViewState extends State<RecordView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(name.toUpperCase(),
-            style: Theme.of(context).textTheme.labelMedium),
+        Text(
+          name.toUpperCase(),
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
         const SizedBox(height: 4),
         AspectRatio(
           aspectRatio: _ratios[name]!,
           child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.grey.shade400),
-              borderRadius: BorderRadius.circular(4),
-            ),
+            decoration: boxDecoration,
             child: png == null
-                ? const Center(child: Text('-'))
-                : Image.memory(png, fit: BoxFit.contain),
+                ? const Center(
+                    child: Text('-', style: TextStyle(color: boxHint)),
+                  )
+                : ClipRRect(
+                    borderRadius: boxRadius,
+                    // The saved handwriting is on white. Multiplying by the
+                    // box colour turns that white into the box's off-white
+                    // and leaves the black ink black, so the writing sits in
+                    // the box instead of on a white patch.
+                    child: Image.memory(
+                      png,
+                      fit: BoxFit.contain,
+                      color: boxFill,
+                      colorBlendMode: BlendMode.multiply,
+                    ),
+                  ),
           ),
         ),
         if (read != null && read.isNotEmpty)
@@ -142,9 +152,7 @@ class _RecordViewState extends State<RecordView> {
             padding: const EdgeInsets.only(top: 4),
             child: Text(
               read,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
+              style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: const Color(0xFFD9B46A)),
             ),
           ),

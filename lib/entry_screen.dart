@@ -3,6 +3,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'box_style.dart';
 import 'database.dart';
 import 'date_field.dart';
 import 'export_screen.dart';
@@ -74,12 +75,11 @@ class _EntryScreenState extends State<EntryScreen> {
   }
 
   Map<String, String> get _criteria => {
-        for (final field in search.searchFields)
-          field: _searchControllers[field]!.text,
-      };
+    for (final field in search.searchFields)
+      field: _searchControllers[field]!.text,
+  };
 
-  bool get _searching =>
-      _criteria.values.any((term) => term.trim().isNotEmpty);
+  bool get _searching => _criteria.values.any((term) => term.trim().isNotEmpty);
 
   void _applySearch() {
     final criteria = _criteria;
@@ -100,13 +100,17 @@ class _EntryScreenState extends State<EntryScreen> {
       });
     }).toList();
 
-    hits.sort((a, b) => search
-        .matchScore(active, {
-          for (final f in search.searchFields) '${f}_ocr': b.ocr[f],
-        })
-        .compareTo(search.matchScore(active, {
-          for (final f in search.searchFields) '${f}_ocr': a.ocr[f],
-        })));
+    hits.sort(
+      (a, b) => search
+          .matchScore(active, {
+            for (final f in search.searchFields) '${f}_ocr': b.ocr[f],
+          })
+          .compareTo(
+            search.matchScore(active, {
+              for (final f in search.searchFields) '${f}_ocr': a.ocr[f],
+            }),
+          ),
+    );
     _shown = hits;
   }
 
@@ -226,11 +230,13 @@ class _EntryScreenState extends State<EntryScreen> {
               Expanded(
                 child: TextField(
                   controller: _searchControllers[field],
-                  decoration: InputDecoration(
-                    labelText: field[0].toUpperCase() + field.substring(1),
-                    hintText: field == 'date' ? 'e.g. 14/09/2026' : null,
-                    border: const OutlineInputBorder(),
-                    isDense: true,
+                  style: boxText,
+                  cursorColor: boxInk,
+                  decoration: boxInput(
+                    context,
+                    hint: field == 'date'
+                        ? 'Date, e.g. 14/09/2026'
+                        : field[0].toUpperCase() + field.substring(1),
                   ),
                   onChanged: (_) => setState(_applySearch),
                 ),
@@ -279,18 +285,21 @@ class _EntryScreenState extends State<EntryScreen> {
           else
             ...(_searching ? _shown : _shown.take(5)).map(
               (record) => ListTile(
-                title: Text(record.ocr['name']?.isNotEmpty == true
-                    ? record.ocr['name']!
-                    : '(name not read)'),
-                subtitle: Text([
-                  record.ocr['place'] ?? '',
-                  record.ocr['date'] ?? '',
-                ].where((s) => s.isNotEmpty).join('  ·  ')),
+                title: Text(
+                  record.ocr['name']?.isNotEmpty == true
+                      ? record.ocr['name']!
+                      : '(name not read)',
+                ),
+                subtitle: Text(
+                  [
+                    record.ocr['place'] ?? '',
+                    record.ocr['date'] ?? '',
+                  ].where((s) => s.isNotEmpty).join('  ·  '),
+                ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) =>
-                        RecordView(db: widget.db, record: record),
+                    builder: (_) => RecordView(db: widget.db, record: record),
                   ),
                 ),
               ),
@@ -357,8 +366,7 @@ class _EntryScreenState extends State<EntryScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Text(_status,
-                    style: Theme.of(context).textTheme.bodySmall),
+                Text(_status, style: Theme.of(context).textTheme.bodySmall),
                 const SizedBox(width: 16),
                 FilledButton(
                   style: FilledButton.styleFrom(

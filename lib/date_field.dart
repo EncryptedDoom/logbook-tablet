@@ -10,12 +10,10 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'box_style.dart';
+
 class DateField extends StatelessWidget {
-  const DateField({
-    super.key,
-    required this.value,
-    required this.onChanged,
-  });
+  const DateField({super.key, required this.value, required this.onChanged});
 
   final DateTime value;
   final ValueChanged<DateTime> onChanged;
@@ -64,6 +62,11 @@ class DateField extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             minimumSize: const Size.fromHeight(56),
             alignment: Alignment.centerLeft,
+            backgroundColor: boxFill,
+            foregroundColor: boxInk,
+            iconColor: boxInk,
+            side: const BorderSide(color: boxEdge),
+            shape: const RoundedRectangleBorder(borderRadius: boxRadius),
           ),
         ),
       ],

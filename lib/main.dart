@@ -5,7 +5,6 @@
 /// fetched the first time.
 library;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -38,11 +37,11 @@ class LogbookApp extends StatelessWidget {
       // a build that lets fingers draw must never pass for the real thing
       builder: allowFingerDrawing
           ? (context, child) => Banner(
-                message: 'TEST MODE',
-                location: BannerLocation.topEnd,
-                color: Colors.red.shade700,
-                child: child!,
-              )
+              message: 'TEST MODE',
+              location: BannerLocation.topEnd,
+              color: Colors.red.shade700,
+              child: child!,
+            )
           : null,
     );
   }
@@ -58,9 +57,9 @@ class ActivationGate extends StatefulWidget {
 }
 
 class _ActivationGateState extends State<ActivationGate> {
-  // DEBUG ONLY - remove before sharing; release builds enforce activation.
-  late Future<bool> _activated =
-      kDebugMode ? Future.value(true) : Licence.isActivated();
+  // Every build checks, debug included: the tablet itself runs debug builds,
+  // and a bypass there would let any copied APK run unactivated.
+  late Future<bool> _activated = Licence.isActivated();
 
   @override
   Widget build(BuildContext context) {
@@ -127,74 +126,92 @@ class _CoverScreenState extends State<CoverScreen> {
     }
   }
 
-  void _proceed() {
+  Future<void> _proceed() async {
     // the entry screen is a normal working screen, not a kiosk splash
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => EntryScreen(db: _db!, recogniser: _recogniser),
       ),
     );
+    // back on the cover: hide the system bars again
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
+
+  /// The cover picture's shape, and where the button sits on it, as fractions
+  /// of its width and height: centred under the WELCOMES badge, in the cream
+  /// gap between that badge (ends at 70%) and the red banner (starts at 87%).
+  /// Measured on the image itself, so the button stays put on any screen.
+  static const _coverAspect = 4790 / 3375;
+  static const _buttonAt = Offset(0.694, 0.784);
+  static const _coverCream = Color(0xFFFFFFCC);
 
   @override
   Widget build(BuildContext context) {
     final ready = _db != null;
     return Scaffold(
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          Positioned.fill(
-            child: Container(
-              color: const Color(0xFFFFFFCC),
-              child: Image.asset(
-                'assets/images/cover.png',
-                fit: BoxFit.contain,
-                alignment: Alignment.center,
-              ),
-            ),
+      // On screens wider than the picture, the bands either side continue its
+      // own edges: white down its left side, cream down its right.
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Colors.white, Colors.white, _coverCream, _coverCream],
+            stops: [0, 0.5, 0.5, 1],
           ),
-          SafeArea(
-            child: Align(
-              // horizontally under WELCOMES' own midpoint (that badge sits
-              // right of screen-center, not centered on it); vertically in
-              // the cream gap between WELCOMES and the red banner below
-              alignment: const Alignment(0.23, 0.67),
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FilledButton(
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(280, 64),
-                        backgroundColor: const Color(0xFF6F4E37),
-                        foregroundColor: Colors.white,
-                        textStyle: const TextStyle(
-                          fontFamily: 'serif',
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      onPressed: ready ? _proceed : null,
-                      child: Text(ready ? 'PROCEED' : 'Preparing...'),
+        ),
+        child: Center(
+          child: AspectRatio(
+            aspectRatio: _coverAspect,
+            child: LayoutBuilder(
+              builder: (context, box) => Stack(
+                children: [
+                  Positioned.fill(
+                    child: Image.asset(
+                      'assets/images/cover.png',
+                      fit: BoxFit.fill,
                     ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 16),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                            color: Theme.of(context).colorScheme.error),
-                        textAlign: TextAlign.center,
+                  ),
+                  Positioned(
+                    left: box.maxWidth * _buttonAt.dx,
+                    top: box.maxHeight * _buttonAt.dy,
+                    child: FractionalTranslation(
+                      // centre the button on that point, not its corner
+                      translation: const Offset(-0.5, -0.5),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          FilledButton(
+                            style: FilledButton.styleFrom(
+                              minimumSize: const Size(280, 64),
+                              backgroundColor: const Color(0xFF6F4E37),
+                              foregroundColor: Colors.white,
+                              textStyle: const TextStyle(
+                                fontFamily: 'serif',
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            onPressed: ready ? _proceed : null,
+                            child: Text(ready ? 'PROCEED' : 'Preparing...'),
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              _error!,
+                              style: const TextStyle(color: Color(0xFFB00020)),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ],
                       ),
-                    ],
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }

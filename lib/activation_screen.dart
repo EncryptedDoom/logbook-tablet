@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'activation_codec.dart';
+import 'box_style.dart';
 import 'licence.dart';
 
 class ActivationScreen extends StatefulWidget {
@@ -31,8 +32,9 @@ class _ActivationScreenState extends State<ActivationScreen> {
     super.initState();
     Licence.deviceCode().then(
       (code) => mounted ? setState(() => _deviceCode = code) : null,
-      onError: (Object e) =>
-          mounted ? setState(() => _error = 'Could not read this tablet: $e') : null,
+      onError: (Object e) => mounted
+          ? setState(() => _error = 'Could not read this tablet: $e')
+          : null,
     );
   }
 
@@ -43,17 +45,20 @@ class _ActivationScreenState extends State<ActivationScreen> {
   }
 
   Future<void> _scan() async {
-    final scanned = await Navigator.of(context).push<String>(
-      MaterialPageRoute(builder: (_) => const _ScannerScreen()),
-    );
+    final scanned = await Navigator.of(
+      context,
+    ).push<String>(MaterialPageRoute(builder: (_) => const _ScannerScreen()));
     if (scanned != null) await _submit(scanned);
   }
 
   Future<void> _submit(String code) async {
     // the easy mistake: typing back the code this screen is showing
     if (_deviceCode != null && normalise(code) == normalise(_deviceCode!)) {
-      setState(() => _error = 'That is this tablet\'s own device code. Enter the '
-          'longer activation code the administrator made from it.');
+      setState(
+        () => _error =
+            'That is this tablet\'s own device code. Enter the '
+            'longer activation code the administrator made from it.',
+      );
       return;
     }
     setState(() {
@@ -67,7 +72,8 @@ class _ActivationScreenState extends State<ActivationScreen> {
     } else {
       setState(() {
         _checking = false;
-        _error = 'That activation code is not for this tablet. '
+        _error =
+            'That activation code is not for this tablet. '
             'Check it was made for the code shown above.';
       });
     }
@@ -86,7 +92,11 @@ class _ActivationScreenState extends State<ActivationScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.lock_outline, size: 48, color: theme.colorScheme.primary),
+                Icon(
+                  Icons.lock_outline,
+                  size: 48,
+                  color: theme.colorScheme.primary,
+                ),
                 const SizedBox(height: 16),
                 Text(
                   'This tablet is not activated',
@@ -113,7 +123,9 @@ class _ActivationScreenState extends State<ActivationScreen> {
                 ),
                 const SizedBox(height: 40),
                 FilledButton.icon(
-                  style: FilledButton.styleFrom(minimumSize: const Size(320, 56)),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(320, 56),
+                  ),
                   onPressed: code == null || _checking ? null : _scan,
                   icon: const Icon(Icons.qr_code_scanner),
                   label: const Text('SCAN ACTIVATION CODE'),
@@ -125,20 +137,26 @@ class _ActivationScreenState extends State<ActivationScreen> {
                 ),
                 if (_showTyping) ...[
                   const SizedBox(height: 8),
-                  TextField(
-                    controller: _typed,
-                    minLines: 2,
-                    maxLines: 4,
-                    textCapitalization: TextCapitalization.characters,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[0-9A-Za-z\s-]')),
-                    ],
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      labelText: 'Activation code (about 100 characters)',
-                      hintText: 'XXXXX-XXXXX-XXXXX-...',
+                  BoxLabel(
+                    'Activation code (about 100 characters)',
+                    child: TextField(
+                      controller: _typed,
+                      minLines: 2,
+                      maxLines: 4,
+                      textCapitalization: TextCapitalization.characters,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'[0-9A-Za-z\s-]'),
+                        ),
+                      ],
+                      style: boxText,
+                      cursorColor: boxInk,
+                      decoration: boxInput(
+                        context,
+                        hint: 'XXXXX-XXXXX-XXXXX-...',
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
