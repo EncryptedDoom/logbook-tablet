@@ -142,8 +142,8 @@ class _CoverScreenState extends State<CoverScreen> {
   /// of its width and height: centred under the WELCOMES badge, in the cream
   /// gap between that badge (ends at 70%) and the red banner (starts at 87%).
   /// Measured on the image itself, so the button stays put on any screen.
-  static const _coverAspect = 4790 / 3375;
-  static const _buttonAt = Offset(0.694, 0.784);
+  static const _coverAspect = 2624 / 1632;
+  static const _buttonAt = Offset(0.694, 0.81);
   static const _coverCream = Color(0xFFFFFFCC);
 
   @override
