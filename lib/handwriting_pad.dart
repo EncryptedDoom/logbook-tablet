@@ -21,6 +21,24 @@ import 'box_style.dart';
 /// must keep palm rejection.
 const allowFingerDrawing = bool.fromEnvironment('ALLOW_FINGER_DRAWING');
 
+/// Pixels saved per logical pixel of the box, best first. Three gives print
+/// quality; the next is the fallback for writing so dense that the PNG passes
+/// [_maxPngBytes].
+const _captureScales = [3.0, 2.0];
+
+/// Every field of a record is read back as one database row, and Android
+/// cannot read a row over 2 MB. Keeping the largest box under this leaves room
+/// for the smaller ones.
+const _maxPngBytes = 800 * 1024;
+
+/// Finds the handle in tests.
+const padResizeHandleKey = ValueKey('pad-resize-handle');
+
+/// How far the handle reaches onto the bottom of the box, and below it.
+/// Together a comfortable touch target, and room for its one line of help.
+const _handleOnBox = 24.0;
+const _handleBelowBox = 24.0;
+
 /// What the pad produced: strokes to recognise, pixels to keep.
 class Handwriting {
   const Handwriting(this.strokes, this.png);
@@ -36,6 +54,7 @@ class HandwritingPad extends StatefulWidget {
     required this.label,
     required this.controller,
     this.aspectRatio = 3.8,
+    this.maxGrowth = 1,
   });
 
   final String label;
@@ -44,6 +63,10 @@ class HandwritingPad extends StatefulWidget {
   /// Sized by ratio rather than a fixed height, so the box keeps its shape at
   /// any width and looks the same when the record is read back.
   final double aspectRatio;
+
+  /// How many times its starting height the box can be dragged out to, by the
+  /// handle under it. 1 means it stays the size it is, with no handle.
+  final double maxGrowth;
 
   @override
   State<HandwritingPad> createState() => _HandwritingPadState();
@@ -68,6 +91,12 @@ class _HandwritingPadState extends State<HandwritingPad> {
   List<Offset> _drawnCurrent = [];
 
   Size _size = Size.zero;
+
+  /// Current height as a multiple of the starting height.
+  double _growth = 1;
+
+  /// True while the handle is being pushed up against what is written.
+  bool _inkInTheWay = false;
 
   @override
   void initState() {
@@ -150,6 +179,35 @@ class _HandwritingPadState extends State<HandwritingPad> {
     setState(() => _drawnCurrent = []);
   }
 
+  /// Follow the handle, between the starting height and the limit. It cannot
+  /// be pushed up past the writing, which would cut off what is already there.
+  void _resize(DragUpdateDetails details) {
+    // from the width, not the height: several drag events can arrive before
+    // the next layout, and the height would be out of date for all but the first
+    final startHeight = _size.width / widget.aspectRatio;
+    if (startHeight <= 0) return;
+    var lowestInk = 0.0;
+    for (final stroke in _drawn) {
+      for (final point in stroke) {
+        if (point.dy > lowestInk) lowestInk = point.dy;
+      }
+    }
+    // a little clear of the ink, so the box edge does not sit on the line
+    final smallest = ((lowestInk + 8) / startHeight).clamp(
+      1.0,
+      widget.maxGrowth,
+    );
+    final wanted = _growth + details.delta.dy / startHeight;
+    setState(() {
+      _inkInTheWay = wanted < smallest && smallest > 1;
+      _growth = wanted.clamp(smallest, widget.maxGrowth);
+    });
+  }
+
+  void _endResize() {
+    if (_inkInTheWay) setState(() => _inkInTheWay = false);
+  }
+
   void _addPoint(Offset position) {
     _current.add(
       StrokePoint(
@@ -167,6 +225,7 @@ class _HandwritingPadState extends State<HandwritingPad> {
       _current.clear();
       _drawn.clear();
       _drawnCurrent = [];
+      _growth = 1;
     });
   }
 
@@ -179,21 +238,29 @@ class _HandwritingPadState extends State<HandwritingPad> {
       return Handwriting(List.of(_strokes), null);
     }
 
+    Uint8List? png;
+    for (final scale in _captureScales) {
+      png = await _render(scale);
+      if (png == null || png.length <= _maxPngBytes) break;
+    }
+    return Handwriting(List.of(_strokes), png);
+  }
+
+  Future<Uint8List?> _render(double scale) async {
     final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
+    final canvas = Canvas(recorder)..scale(scale);
     canvas.drawRect(
       Rect.fromLTWH(0, 0, _size.width, _size.height),
       Paint()..color = Colors.white,
     );
     _paintStrokes(canvas, _drawn, const []);
     final image = await recorder.endRecording().toImage(
-      _size.width.round(),
-      _size.height.round(),
+      (_size.width * scale).round(),
+      (_size.height * scale).round(),
     );
     final data = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
-
-    return Handwriting(List.of(_strokes), data?.buffer.asUint8List());
+    return data?.buffer.asUint8List();
   }
 
   @override
@@ -218,57 +285,116 @@ class _HandwritingPadState extends State<HandwritingPad> {
             ),
           ],
         ),
-        AspectRatio(
-          aspectRatio: widget.aspectRatio,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              _size = Size(constraints.maxWidth, constraints.maxHeight);
-              return DecoratedBox(
-                decoration: boxDecoration,
-                // Without this the enclosing scroll view treats a pen stroke
-                // as a drag and scrolls the page out from under the writer.
-                // An eager recogniser restricted to the stylus claims the
-                // gesture the moment the pen lands, so the Scrollable loses -
-                // while a finger still scrolls normally over the pad.
-                child: RawGestureDetector(
-                  gestures: <Type, GestureRecognizerFactory>{
-                    EagerGestureRecognizer:
-                        GestureRecognizerFactoryWithHandlers<
-                          EagerGestureRecognizer
-                        >(
-                          () => EagerGestureRecognizer(
-                            supportedDevices: {
-                              PointerDeviceKind.stylus,
-                              PointerDeviceKind.invertedStylus,
-                              if (allowFingerDrawing) ...[
-                                PointerDeviceKind.touch,
-                                PointerDeviceKind.mouse,
-                              ],
-                            },
+        _withResizeHandle(
+          AspectRatio(
+            aspectRatio: widget.aspectRatio / _growth,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                _size = Size(constraints.maxWidth, constraints.maxHeight);
+                return DecoratedBox(
+                  decoration: boxDecoration,
+                  // Without this the enclosing scroll view treats a pen stroke
+                  // as a drag and scrolls the page out from under the writer.
+                  // An eager recogniser restricted to the stylus claims the
+                  // gesture the moment the pen lands, so the Scrollable loses -
+                  // while a finger still scrolls normally over the pad.
+                  child: RawGestureDetector(
+                    gestures: <Type, GestureRecognizerFactory>{
+                      EagerGestureRecognizer:
+                          GestureRecognizerFactoryWithHandlers<
+                            EagerGestureRecognizer
+                          >(
+                            () => EagerGestureRecognizer(
+                              supportedDevices: {
+                                PointerDeviceKind.stylus,
+                                PointerDeviceKind.invertedStylus,
+                                if (allowFingerDrawing) ...[
+                                  PointerDeviceKind.touch,
+                                  PointerDeviceKind.mouse,
+                                ],
+                              },
+                            ),
+                            (_) {},
                           ),
-                          (_) {},
+                    },
+                    child: Listener(
+                      onPointerDown: _start,
+                      onPointerMove: _extend,
+                      onPointerUp: _end,
+                      // e.g. the system takes the pointer for a gesture
+                      onPointerCancel: _end,
+                      // belt and braces: nothing this pad paints can show
+                      // outside it, rounded corners included, whatever the
+                      // stroke data holds
+                      child: ClipRRect(
+                        borderRadius: boxRadius,
+                        child: CustomPaint(
+                          painter: _PadPainter(_drawn, _drawnCurrent),
+                          size: Size.infinite,
                         ),
-                  },
-                  child: Listener(
-                    onPointerDown: _start,
-                    onPointerMove: _extend,
-                    onPointerUp: _end,
-                    // e.g. the system takes the pointer for a gesture
-                    onPointerCancel: _end,
-                    // belt and braces: nothing this pad paints can show
-                    // outside it, rounded corners included, whatever the
-                    // stroke data holds
-                    child: ClipRRect(
-                      borderRadius: boxRadius,
-                      child: CustomPaint(
-                        painter: _PadPainter(_drawn, _drawnCurrent),
-                        size: Size.infinite,
                       ),
                     ),
                   ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// A strip across the box's bottom edge, partly on the box and partly under
+  /// it, so that grabbing the edge itself resizes the box rather than drawing a
+  /// line. Any finger or pen can drag it; being the inner gesture, it wins over
+  /// the page scrolling.
+  Widget _withResizeHandle(Widget box) {
+    if (widget.maxGrowth <= 1) return box;
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: _handleBelowBox),
+          child: box,
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: _handleOnBox + _handleBelowBox,
+          child: Semantics(
+            label: 'Drag to resize ${widget.label} box',
+            child: MouseRegion(
+              cursor: SystemMouseCursors.resizeUpDown,
+              child: GestureDetector(
+                key: padResizeHandleKey,
+                behavior: HitTestBehavior.opaque,
+                dragStartBehavior: DragStartBehavior.down,
+                onVerticalDragUpdate: _resize,
+                onVerticalDragEnd: (_) => _endResize(),
+                onVerticalDragCancel: _endResize,
+                child: Column(
+                  children: [
+                    const SizedBox(height: _handleOnBox - 12),
+                    Container(
+                      width: 96,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: boxHint,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const Spacer(),
+                    if (_inkInTheWay)
+                      Text(
+                        'Writing is in the way. Clear it to shrink the box.',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                  ],
                 ),
-              );
-            },
+              ),
+            ),
           ),
         ),
       ],

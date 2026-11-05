@@ -34,6 +34,10 @@ class _EntryScreenState extends State<EntryScreen> {
     'signature': 2.6,
   };
 
+  /// The comment box can be dragged out to this many times its starting
+  /// height, which is about what fits on the screen at once.
+  static const _commentMaxGrowth = 2.5;
+
   final _controllers = {
     for (final field in _fields.keys) field: HandwritingPadController(),
   };
@@ -342,6 +346,7 @@ class _EntryScreenState extends State<EntryScreen> {
               label: 'comment',
               controller: _controllers['comment']!,
               aspectRatio: _fields['comment']!,
+              maxGrowth: _commentMaxGrowth,
             ),
             const SizedBox(height: 16),
             HandwritingPad(

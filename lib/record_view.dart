@@ -112,6 +112,19 @@ class _RecordViewState extends State<RecordView> {
     );
   }
 
+  /// The comment box grows while it is written in, so its shape is read from
+  /// the saved picture: width and height are the first things in a PNG, after
+  /// its 16-byte header.
+  double _shapeOf(String name, Uint8List? png) {
+    if (name == 'comment' && png != null && png.length >= 24) {
+      final header = ByteData.sublistView(png);
+      final width = header.getUint32(16);
+      final height = header.getUint32(20);
+      if (width > 0 && height > 0) return width / height;
+    }
+    return _ratios[name]!;
+  }
+
   Widget _field(String name) {
     final png = _images[name];
     final read = widget.record.ocr[name];
@@ -125,7 +138,7 @@ class _RecordViewState extends State<RecordView> {
         ),
         const SizedBox(height: 4),
         AspectRatio(
-          aspectRatio: _ratios[name]!,
+          aspectRatio: _shapeOf(name, png),
           child: DecoratedBox(
             decoration: boxDecoration,
             child: png == null
