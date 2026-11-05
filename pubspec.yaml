@@ -39,6 +39,8 @@ dependencies:
   # export: pdf lays the document out, printing shares or prints it
   pdf: ^3.11.3
   printing: ^5.14.2
+  # crops handwriting to its ink for the export table
+  image: ^4.0.0
   cryptography: ^2.9.0
   mobile_scanner: ^7.4.2
 

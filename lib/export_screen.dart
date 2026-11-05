@@ -162,7 +162,7 @@ class _ExportScreenState extends State<ExportScreen> {
         final images = await widget.db.imagesFor(record.rawId);
         entries.add(ExportEntry(record, images, vip: _vip.contains(record.id)));
       }
-      return await buildLogbookPdf(entries, format: format);
+      return await buildLogbookPdfInBackground(entries, format: format);
     } catch (e) {
       if (mounted) setState(() => _status = 'Export failed: $e');
       return null;
